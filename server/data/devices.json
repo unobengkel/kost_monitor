@@ -1,0 +1,44 @@
+[
+  {
+    "device_id": "kamar_01",
+    "nama_kamar": "Kamar A",
+    "batas_daya": 900.0,
+    "relay_state": "OFF",
+    "overload": false,
+    "daya_saat_ini": 0.0,
+    "arus_saat_ini": 0.0,
+    "energi_total": 0.0,
+    "daya_max": 0.0,
+    "status_koneksi": "OFFLINE",
+    "last_seen": null,
+    "created_at": "2026-05-22T21:17:45.336564"
+  },
+  {
+    "device_id": "kamar_02",
+    "nama_kamar": "Kamar B",
+    "batas_daya": 900.0,
+    "relay_state": "OFF",
+    "overload": false,
+    "daya_saat_ini": 0.0,
+    "arus_saat_ini": 0.0,
+    "energi_total": 0.0,
+    "daya_max": 0.0,
+    "status_koneksi": "OFFLINE",
+    "last_seen": null,
+    "created_at": "2026-05-22T21:17:45.338865"
+  },
+  {
+    "device_id": "kamar_03",
+    "nama_kamar": "Kamar C",
+    "batas_daya": 900.0,
+    "relay_state": "OFF",
+    "overload": false,
+    "daya_saat_ini": 0.0,
+    "arus_saat_ini": 0.0,
+    "energi_total": 0.0,
+    "daya_max": 0.0,
+    "status_koneksi": "OFFLINE",
+    "last_seen": null,
+    "created_at": "2026-05-22T21:17:45.340173"
+  }
+]
