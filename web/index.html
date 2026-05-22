@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kost Monitor - Sistem Monitoring Listrik Kamar Kost</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { inter: ['Inter', 'sans-serif'] },
+                    colors: {
+                        primary: { 50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 800: '#3730a3', 900: '#312e81' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #6366f1; border-radius: 3px; }
+        .dark ::-webkit-scrollbar-thumb { background: #818cf8; }
+        .glass { background: rgba(255,255,255,0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3); }
+        .dark .glass { background: rgba(17,24,39,0.7); border-color: rgba(255,255,255,0.1); }
+        .stat-card { transition: all 0.3s ease; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 10px 40px rgba(99,102,241,0.15); }
+        .device-card { transition: all 0.3s ease; cursor: pointer; }
+        .device-card:hover { transform: translateY(-2px); }
+        .skeleton { background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%; animation: skeleton 1.5s ease infinite; }
+        .dark .skeleton { background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%); background-size: 200% 100%; }
+        @keyframes skeleton { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        .pulse-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .pulse-dot.online { background: #10b981; box-shadow: 0 0 8px rgba(16,185,129,0.6); animation: pulse-online 2s infinite; }
+        .pulse-dot.offline { background: #ef4444; }
+        .pulse-dot.overload { background: #f59e0b; animation: pulse-overload 1s infinite; }
+        @keyframes pulse-online { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes pulse-overload { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.3); } }
+        .toast { animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s forwards; }
+        @keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes fadeOut { to { opacity: 0; transform: translateY(-20px); } }
+        .tab-active { border-bottom: 2px solid #6366f1; color: #6366f1; font-weight: 600; }
+        .modal-overlay { animation: fadeIn 0.2s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+
+<!-- ============================================================ -->
+<!-- MOBILE HEADER -->
+<!-- ============================================================ -->
+<header class="fixed top-0 left-0 right-0 z-50 glass shadow-sm lg:hidden">
+    <div class="flex items-center justify-between px-4 py-3">
+        <button id="menuToggle" class="text-gray-600 dark:text-gray-300 text-xl">
+            <i class="fas fa-bars"></i>
+        </button>
+        <div class="flex items-center space-x-2">
+            <i class="fas fa-bolt text-primary-600 dark:text-primary-400"></i>
+            <span class="font-semibold text-sm">Kost Monitor</span>
+        </div>
+        <button onclick="toggleTheme()" class="text-gray-600 dark:text-gray-300 text-xl">
+            <i class="fas" id="themeIcon"></i>
+        </button>
+    </div>
+</header>
+
+<!-- ============================================================ -->
+<!-- SIDEBAR -->
+<!-- ============================================================ -->
+<aside id="sidebar" class="fixed top-0 left-0 z-40 h-screen w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 overflow-y-auto shadow-xl lg:shadow-none -translate-x-full lg:translate-x-0 transition-transform duration-300">
+    <div class="sticky top-0 bg-white dark:bg-gray-800 z-10 border-b border-gray-200 dark:border-gray-700">
+        <div class="p-4 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-gradient-to-br from-primary-500 to-purple-600 rounded-xl flex items-center justify-center text-white shadow-lg"><i class="fas fa-bolt text-lg"></i></div>
+                <div><h1 class="font-bold text-sm">Kost Monitor</h1><p class="text-xs text-gray-500 dark:text-gray-400">v1.0</p></div>
+            </div>
+            <button id="sidebarClose" class="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"><i class="fas fa-times"></i></button>
+        </div>
+    </div>
+    <nav class="p-3 space-y-1">
+        <a href="#" onclick="showPage('dashboard')" class="nav-link flex items-center px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-all" data-page="dashboard">
+            <i class="fas fa-chart-pie w-6 text-primary-500"></i> Dashboard
+        </a>
+        <a href="#" onclick="showPage('devices')" class="nav-link flex items-center px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-all" data-page="devices">
+            <i class="fas fa-microchip w-6 text-green-500"></i> Kamar
+        </a>
+        <a href="#" onclick="showPage('history')" class="nav-link flex items-center px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-all" data-page="history">
+            <i class="fas fa-history w-6 text-blue-500"></i> Riwayat
+        </a>
+        <a href="#" onclick="showPage('settings')" class="nav-link flex items-center px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-all" data-page="settings">
+            <i class="fas fa-cog w-6 text-orange-500"></i> Pengaturan
+        </a>
+        <div class="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+        <a href="#" onclick="openSimulasi()" class="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 text-primary-600 dark:text-primary-400 transition-all">
+            <i class="fas fa-wifi w-6"></i> Simulasi IoT
+        </a>
+        <a href="dokumentasi.html" class="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-all">
+            <i class="fas fa-book w-6"></i> Dokumentasi
+        </a>
+    </nav>
+    <div class="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-3 text-center">
+        <p class="text-xs text-gray-400">Sistem Monitoring Kost &copy; 2026</p>
+    </div>
+</aside>
+
+<!-- Sidebar Overlay -->
+<div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-30 hidden lg:hidden"></div>
+
+<!-- ============================================================ -->
+<!-- MAIN CONTENT -->
+<!-- ============================================================ -->
+<main id="mainContent" class="lg:ml-64 pt-16 lg:pt-0 min-h-screen transition-all duration-300">
+
+    <!-- ============================================================ -->
+    <!-- PAGE: DASHBOARD -->
+    <!-- ============================================================ -->
+    <div id="page-dashboard" class="page-content p-4 sm:p-6 lg:p-8">
+        <div class="max-w-7xl mx-auto">
+            <!-- Header -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
+                <div>
+                    <h1 class="text-2xl lg:text-3xl font-bold">Dashboard</h1>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Monitoring real-time pemakaian listrik kamar kost</p>
+                </div>
+                <div class="flex items-center space-x-3 mt-3 sm:mt-0">
+                    <span class="text-xs text-gray-400" id="lastUpdate">Memperbarui...</span>
+                    <button onclick="loadDashboard()" class="px-3 py-1.5 bg-primary-500 text-white rounded-lg text-sm hover:bg-primary-600 transition-all"><i class="fas fa-sync-alt mr-1"></i> Refresh</button>
+                </div>
+            </div>
+
+            <!-- Stat Cards -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6" id="statCards">
+                <div class="stat-card bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 border border-gray-100 dark:border-gray-700">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center"><i class="fas fa-microchip text-blue-600 dark:text-blue-400"></i></div>
+                        <span class="text-2xl font-bold" id="statTotalDevices">0</span>
+                    </div>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Total Perangkat</p>
+                </div>
+                <div class="stat-card bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 border border-gray-100 dark:border-gray-700">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center"><i class="fas fa-wifi text-green-600 dark:text-green-400"></i></div>
+                        <span class="text-2xl font-bold text-green-600" id="statOnline">0</span>
+                    </div>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Online</p>
+                </div>
+                <div class="stat-card bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 border border-gray-100 dark:border-gray-700">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-xl flex items-center justify-center"><i class="fas fa-exclamation-triangle text-red-600 dark:text-red-400"></i></div>
+                        <span class="text-2xl font-bold text-red-600" id="statOverload">0</span>
+                    </div>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Overload</p>
+                </div>
+                <div class="stat-card bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 border border-gray-100 dark:border-gray-700">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center"><i class="fas fa-bolt text-purple-600 dark:text-purple-400"></i></div>
+                        <span class="text-2xl font-bold" id="statTotalPower">0 W</span>
+                    </div>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Total Daya</p>
+                </div>
+            </div>
+
+            <!-- Chart & Device List -->
+            <div class="grid lg:grid-cols-3 gap-6">
+                <!-- Chart -->
+                <div class="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 border border-gray-100 dark:border-gray-700">
+                    <h3 class="font-semibold mb-4">Grafik Daya <span class="text-sm font-normal text-gray-400">(real-time)</span></h3>
+                    <div class="relative" style="height:280px">
+                        <canvas id="powerChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Mini Device List -->
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 border border-gray-100 dark:border-gray-700">
+                    <h3 class="font-semibold mb-4">Status Kamar</h3>
+                    <div id="miniDeviceList" class="space-y-3">
+                        <div class="text-center py-8 text-gray-400">
+                            <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                            <p class="text-sm">Memuat data...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- PAGE: DEVICES / KAMAR -->
+    <!-- ============================================================ -->
+    <div id="page-devices" class="page-content p-4 sm:p-6 lg:p-8 hidden">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
+                <div>
+                    <h1 class="text-2xl lg:text-3xl font-bold">Kamar</h1>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Detail pemakaian listrik per kamar</p>
+                </div>
+                <div class="flex space-x-2 mt-3 sm:mt-0">
+                    <button onclick="loadDevices()" class="px-3 py-1.5 bg-primary-500 text-white rounded-lg text-sm hover:bg-primary-600 transition-all"><i class="fas fa-sync-alt mr-1"></i> Refresh</button>
+                    <button onclick="openAddDeviceModal()" class="px-3 py-1.5 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600 transition-all"><i class="fas fa-plus mr-1"></i> Tambah</button>
+                </div>
+            </div>
+            <div id="deviceGrid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="col-span-full text-center py-12 text-gray-400">
+                    <i class="fas fa-spinner fa-spin text-3xl mb-3"></i>
+                    <p>Memuat data...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- PAGE: HISTORY -->
+    <!-- ============================================================ -->
+    <div id="page-history" class="page-content p-4 sm:p-6 lg:p-8 hidden">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
+                <div>
+                    <h1 class="text-2xl lg:text-3xl font-bold">Riwayat</h1>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Histori pemakaian listrik per kamar</p>
+                </div>
+                <div class="flex space-x-2 mt-3 sm:mt-0">
+                    <select id="historyDeviceSelect" class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700" onchange="loadHistory()">
+                        <option value="">Pilih Kamar...</option>
+                    </select>
+                    <select id="historyLimit" class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700" onchange="loadHistory()">
+                        <option value="20">20 data</option>
+                        <option value="50" selected>50 data</option>
+                        <option value="100">100 data</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid lg:grid-cols-2 gap-6">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 border border-gray-100 dark:border-gray-700">
+                    <h3 class="font-semibold mb-4">Grafik Riwayat Daya</h3>
+                    <div style="height:250px"><canvas id="historyChart"></canvas></div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 border border-gray-100 dark:border-gray-700">
+                    <h3 class="font-semibold mb-4">Tabel Riwayat</h3>
+                    <div class="overflow-x-auto max-h-80 overflow-y-auto">
+                        <table class="w-full text-sm" id="historyTable">
+                            <thead class="text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                                <tr><th class="text-left pb-2">Waktu</th><th class="text-right pb-2">Daya (W)</th><th class="text-right pb-2">Arus (A)</th><th class="text-center pb-2">Relay</th></tr>
+                            </thead>
+                            <tbody id="historyBody"><tr><td colspan="4" class="text-center py-8 text-gray-400">Pilih kamar untuk melihat riwayat</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- PAGE: SETTINGS -->
+    <!-- ============================================================ -->
+    <div id="page-settings" class="page-content p-4 sm:p-6 lg:p-8 hidden">
+        <div class="max-w-4xl mx-auto">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h1 class="text-2xl lg:text-3xl font-bold">Pengaturan</h1>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Konfigurasi sistem dan perangkat</p>
+                </div>
+            </div>
+
+            <!-- Tema -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 border border-gray-100 dark:border-gray-700 mb-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="font-semibold">Tema Tampilan</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Ganti antara mode terang dan gelap</p>
+                    </div>
+                    <button onclick="toggleTheme()" class="px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition-all">
+                        <i class="fas" id="themeToggleIcon"></i> <span id="themeToggleText">Gelap</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Konfigurasi Server -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 border border-gray-100 dark:border-gray-700 mb-4">
+                <h3 class="font-semibold mb-4">Konfigurasi Server</h3>
+                <div class="grid sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">URL Server API</label>
+                        <input type="text" id="serverUrl" value="http://localhost:5000" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Interval Refresh (detik)</label>
+                        <input type="number" id="refreshInterval" value="5" min="1" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700">
+                    </div>
+                </div>
+                <button onclick="saveSettings()" class="mt-4 px-4 py-2 bg-primary-500 text-white rounded-lg text-sm hover:bg-primary-600 transition-all"><i class="fas fa-save mr-1"></i> Simpan</button>
+            </div>
+
+            <!-- Manajemen Perangkat -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 border border-gray-100 dark:border-gray-700">
+                <h3 class="font-semibold mb-4">Manajemen Perangkat</h3>
+                <div id="settingsDeviceList" class="space-y-2">
+                    <div class="text-center py-4 text-gray-400 text-sm">Memuat...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+<!-- ============================================================ -->
+<!-- TOAST CONTAINER -->
+<!-- ============================================================ -->
+<div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Detail Kamar -->
+<!-- ============================================================ -->
+<div id="deviceModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50 modal-overlay" onclick="closeDeviceModal()"></div>
+    <div class="relative max-w-lg mx-auto mt-16 p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold" id="modalAvatar">K</div>
+                    <div>
+                        <h3 class="font-bold text-lg" id="modalNamaKamar">-</h3>
+                        <p class="text-xs text-gray-400" id="modalDeviceId">-</p>
+                    </div>
+                </div>
+                <div id="modalStatusDot" class="pulse-dot online"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
+                    <p class="text-xs text-gray-400">Daya</p>
+                    <p class="text-xl font-bold" id="modalDaya">0 W</p>
+                </div>
+                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
+                    <p class="text-xs text-gray-400">Arus</p>
+                    <p class="text-xl font-bold" id="modalArus">0 A</p>
+                </div>
+                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
+                    <p class="text-xs text-gray-400">Energi</p>
+                    <p class="text-xl font-bold" id="modalEnergi">0 kWh</p>
+                </div>
+                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
+                    <p class="text-xs text-gray-400">Batas Daya</p>
+                    <p class="text-xl font-bold" id="modalBatasDaya">900 W</p>
+                </div>
+            </div>
+            <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl mb-4">
+                <span class="text-sm font-medium">Relay: <span id="modalRelayState" class="font-bold">OFF</span></span>
+                <div class="flex space-x-2">
+                    <button onclick="controlRelay('ON')" class="px-4 py-2 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600 transition-all"><i class="fas fa-power-off mr-1"></i> ON</button>
+                    <button onclick="controlRelay('OFF')" class="px-4 py-2 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 transition-all"><i class="fas fa-power-off mr-1"></i> OFF</button>
+                </div>
+            </div>
+            <div class="flex space-x-2">
+                <label class="text-sm text-gray-500 mt-1">Batas Daya:</label>
+                <input type="number" id="modalBatasDayaInput" class="flex-1 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700" placeholder="900">
+                <button onclick="updateBatasDaya()" class="px-3 py-1.5 bg-primary-500 text-white rounded-lg text-sm hover:bg-primary-600 transition-all">Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Tambah Perangkat -->
+<!-- ============================================================ -->
+<div id="addDeviceModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50 modal-overlay" onclick="closeAddDeviceModal()"></div>
+    <div class="relative max-w-md mx-auto mt-16 p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6">
+            <h3 class="font-bold text-lg mb-4">Tambah Kamar Baru</h3>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-sm font-medium mb-1">ID Perangkat</label>
+                    <input type="text" id="newDeviceId" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700" placeholder="kamar_04">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Nama Kamar</label>
+                    <input type="text" id="newNamaKamar" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700" placeholder="Kamar D">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Batas Daya (Watt)</label>
+                    <input type="number" id="newBatasDaya" value="900" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700">
+                </div>
+            </div>
+            <div class="flex justify-end space-x-2 mt-4">
+                <button onclick="closeAddDeviceModal()" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm">Batal</button>
+                <button onclick="addDevice()" class="px-4 py-2 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600"><i class="fas fa-plus mr-1"></i> Tambah</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Simulasi IoT -->
+<!-- ============================================================ -->
+<div id="simulasiModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50 modal-overlay" onclick="closeSimulasi()"></div>
+    <div class="relative max-w-xl mx-auto mt-12 p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-lg"><i class="fas fa-wifi text-primary-500 mr-2"></i>Simulasi IoT ESP8266</h3>
+                <button onclick="closeSimulasi()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Kirim data simulasi sensor ke server untuk menguji sistem.</p>
+            <div class="grid sm:grid-cols-2 gap-3 mb-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Perangkat</label>
+                    <select id="simDeviceId" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700"></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Arus (A)</label>
+                    <input type="range" id="simArus" min="0" max="10" step="0.1" value="0" class="w-full" oninput="updateSimDaya()">
+                    <span class="text-xs text-gray-400" id="simArusValue">0.0 A</span>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Daya (W)</label>
+                    <input type="range" id="simDaya" min="0" max="2200" step="10" value="0" class="w-full" oninput="updateSimArus()">
+                    <span class="text-xs text-gray-400" id="simDayaValue">0 W</span>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Status Relay</label>
+                    <select id="simRelay" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700">
+                        <option value="ON">ON</option>
+                        <option value="OFF">OFF</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" id="simOverload" class="rounded">
+                    <label for="simOverload" class="text-sm text-red-500 font-medium">Simulasi Overload</label>
+                </div>
+                <button onclick="sendSimulatedData()" class="px-5 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-all"><i class="fas fa-paper-plane mr-1"></i> Kirim Data</button>
+            </div>
+            <div class="mt-3 text-xs text-gray-400" id="simStatus">Siap.</div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- JAVASCRIPT -->
+<!-- ============================================================ -->
+<script>
+// ================================================================
+// STATE
+// ================================================================
+const STATE = {
+    API_BASE: localStorage.getItem('apiBase') || window.location.origin,
+    devices: [],
+    currentDeviceId: null,
+    powerChart: null,
+    historyChart: null,
+    refreshInterval: null,
+    activePage: 'dashboard',
+    chartLabels: [],
+    chartData: [],
+    darkMode: localStorage.getItem('theme') === 'dark'
+};
+
+// ================================================================
+// INIT
+// ================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    // Init theme
+    if (STATE.darkMode) {
+        document.documentElement.classList.add('dark');
+    }
+    updateThemeIcon();
+    
+    // Init sidebar
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    const closeBtn = document.getElementById('sidebarClose');
+    
+    if (menuToggle) {
+        menuToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('-translate-x-full');
+            overlay.classList.toggle('hidden');
+            document.body.classList.toggle('overflow-hidden');
+        });
+    }
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            sidebar.classList.add('-translate-x-full');
+            overlay.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+        });
+    }
+    if (overlay) {
+        overlay.addEventListener('click', () => {
+            sidebar.classList.add('-translate-x-full');
+            overlay.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+        });
+    }
+    
+    // Load initial data
+    loadDashboard();
+    loadDevicesForSelect();
+    loadSettingsDevices();
+    
+    // Auto refresh
+    startAutoRefresh();
+});
+
+function startAutoRefresh() {
+    if (STATE.refreshInterval) clearInterval(STATE.refreshInterval);
+    const interval = parseInt(localStorage.getItem('refreshInterval') || '5') * 1000;
+    STATE.refreshInterval = setInterval(() => {
+        if (STATE.activePage === 'dashboard') loadDashboard(false);
+        else if (STATE.activePage === 'devices') loadDevices(false);
+    }, interval);
+}
+
+// ================================================================
+// PAGE NAVIGATION
+// ================================================================
+function showPage(page) {
+    STATE.activePage = page;
+    
+    // Hide all pages
+    document.querySelectorAll('.page-content').forEach(el => el.classList.add('hidden'));
+    
+    // Show target page
+    const target = document.getElementById(`page-${page}`);
+    if (target) target.classList.remove('hidden');
+    
+    // Update nav links
+    document.querySelectorAll('.nav-link').forEach(el => {
+        el.classList.remove('active', 'bg-gray-100', 'dark:bg-gray-700');
+        if (el.dataset.page === page) {
+            el.classList.add('active', 'bg-gray-100', 'dark:bg-gray-700');
+        }
+    });
+    
+    // Close sidebar on mobile
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    sidebar.classList.add('-translate-x-full');
+    if (overlay) overlay.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+    
+    // Load page-specific data
+    if (page === 'dashboard') loadDashboard();
+    if (page === 'devices') loadDevices();
+    if (page === 'history') loadHistory();
+    if (page === 'settings') loadSettingsDevices();
+}
+
+// ================================================================
+// THEME
+// ================================================================
+function toggleTheme() {
+    STATE.darkMode = !STATE.darkMode;
+    if (STATE.darkMode) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+    } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+    }
+    updateThemeIcon();
+}
+
+function updateThemeIcon() {
+    const icon = STATE.darkMode ? 'fa-sun' : 'fa-moon';
+    const text = STATE.darkMode ? 'Terang' : 'Gelap';
+    document.querySelectorAll('#themeIcon, #themeToggleIcon').forEach(el => {
+        if (el) el.className = `fas ${icon}`;
+    });
+    const textEl = document.getElementById('themeToggleText');
+    if (textEl) textEl.textContent = text;
+}
+
+// ================================================================
+// TOAST
+// ================================================================
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toastContainer');
+    const colors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        warning: 'bg-yellow-500',
+        info: 'bg-blue-500'
+    };
+    const icons = {
+        success: 'fa-check-circle',
+        error: 'fa-times-circle',
+        warning: 'fa-exclamation-circle',
+        info: 'fa-info-circle'
+    };
+    const toast = document.createElement('div');
+    toast.className = `toast ${colors[type]} text-white px-4 py-3 rounded-xl shadow-lg flex items-center space-x-2 text-sm`;
+    toast.innerHTML = `<i class="fas ${icons[type]}"></i><span>${message}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+// ================================================================
+// API HELPER
+// ================================================================
+async function apiFetch(endpoint, options = {}) {
+    const url = `${STATE.API_BASE}/api${endpoint}`;
+    const config = {
+        headers: { 'Content-Type': 'application/json' },
+        ...options
+    };
+    try {
+        const res = await fetch(url, config);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Request gagal');
+        return data;
+    } catch (err) {
+        if (err.name !== 'AbortError') {
+            console.error(`API Error [${endpoint}]:`, err);
+            showToast(err.message, 'error');
+        }
+        throw err;
+    }
+}
+
+// ================================================================
+// DASHBOARD
+// ================================================================
+let dashboardLoading = false;
+
+async function loadDashboard(showLoading = true) {
+    if (dashboardLoading) return;
+    dashboardLoading = true;
+    
+    try {
+        const data = await apiFetch('/dashboard');
+        if (!data) return;
+        
+        // Update stats
+        document.getElementById('statTotalDevices').textContent = data.total_devices || 0;
+        document.getElementById('statOnline').textContent = data.online_devices || 0;
+        document.getElementById('statOverload').textContent = data.overload_count || 0;
+        document.getElementById('statTotalPower').textContent = (data.total_daya || 0) + ' W';
+        document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('id-ID');
+        
+        STATE.devices = data.devices || [];
+        
+        // Update mini device list
+        renderMiniDeviceList(data.devices || []);
+        
+        // Update chart
+        updatePowerChart(data.devices || []);
+        
+    } catch (err) {
+        // Silently handle for auto-refresh
+    } finally {
+        dashboardLoading = false;
+    }
+}
+
+function renderMiniDeviceList(devices) {
+    const container = document.getElementById('miniDeviceList');
+    
+    if (devices.length === 0) {
+        container.innerHTML = '<div class="text-center py-8 text-gray-400"><i class="fas fa-microchip text-3xl mb-2"></i><p class="text-sm">Belum ada perangkat</p></div>';
+        return;
+    }
+    
+    container.innerHTML = devices.map(d => `
+        <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-all" onclick="showDeviceDetail('${d.device_id}')">
+            <div class="flex items-center space-x-3">
+                <span class="pulse-dot ${d.status_koneksi === 'ONLINE' ? 'online' : d.overload ? 'overload' : 'offline'}"></span>
+                <div>
+                    <p class="font-medium text-sm">${d.nama_kamar}</p>
+                    <p class="text-xs text-gray-400">${d.daya_saat_ini} W | ${d.arus_saat_ini} A</p>
+                </div>
+            </div>
+            <span class="text-xs px-2 py-1 rounded-full ${
+                d.relay_state === 'ON' ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'
+            }">${d.relay_state}</span>
+        </div>
+    `).join('');
+}
+
+function updatePowerChart(devices) {
+    const canvas = document.getElementById('powerChart');
+    if (!canvas) return;
+    
+    const labels = devices.map(d => d.nama_kamar || d.device_id);
+    const dayaData = devices.map(d => d.daya_saat_ini || 0);
+    const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16'];
+    
+    if (STATE.powerChart) {
+        STATE.powerChart.data.labels = labels;
+        STATE.powerChart.data.datasets[0].data = dayaData;
+        STATE.powerChart.update('none');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    STATE.powerChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Daya (Watt)',
+                data: dayaData,
+                backgroundColor: colors.slice(0, labels.length),
+                borderRadius: 6,
+                borderSkipped: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    ticks: { callback: (v) => v + ' W' }
+                },
+                x: {
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+}
+
+// ================================================================
+// DEVICES / KAMAR
+// ================================================================
+async function loadDevices(showLoading = true) {
+    try {
+        const data = await apiFetch('/devices');
+        const devices = data.devices || [];
+        STATE.devices = devices;
+        renderDeviceGrid(devices);
+    } catch (err) {}
+}
+
+function renderDeviceGrid(devices) {
+    const container = document.getElementById('deviceGrid');
+    
+    if (devices.length === 0) {
+        container.innerHTML = '<div class="col-span-full text-center py-12 text-gray-400"><i class="fas fa-microchip text-4xl mb-3"></i><p>Belum ada perangkat terdaftar</p><button onclick="openAddDeviceModal()" class="mt-3 px-4 py-2 bg-primary-500 text-white rounded-lg text-sm">Tambah Perangkat</button></div>';
+        return;
+    }
+    
+    container.innerHTML = devices.map(d => `
+        <div class="device-card bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 border border-gray-100 dark:border-gray-700" onclick="showDeviceDetail('${d.device_id}')">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-primary-400 to-purple-500 rounded-xl flex items-center justify-center text-white font-bold text-sm">
+                        ${(d.nama_kamar || d.device_id).charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-sm">${d.nama_kamar}</h3>
+                        <p class="text-xs text-gray-400">${d.device_id}</p>
+                    </div>
+                </div>
+                <span class="pulse-dot ${d.status_koneksi === 'ONLINE' ? 'online' : d.overload ? 'overload' : 'offline'}"></span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 mb-3">
+                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2 text-center">
+                    <p class="text-xs text-gray-400">Daya</p>
+                    <p class="font-bold text-lg">${d.daya_saat_ini} <span class="text-xs font-normal">W</span></p>
+                </div>
+                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2 text-center">
+                    <p class="text-xs text-gray-400">Arus</p>
+                    <p class="font-bold text-lg">${d.arus_saat_ini} <span class="text-xs font-normal">A</span></p>
+                </div>
+            </div>
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <span class="text-xs ${d.relay_state === 'ON' ? 'text-green-500' : 'text-red-500'}">
+                        <i class="fas fa-power-off mr-1"></i>${d.relay_state}
+                    </span>
+                    ${d.overload ? '<span class="text-xs text-yellow-500"><i class="fas fa-exclamation-triangle mr-1"></i>Overload</span>' : ''}
+                </div>
+                <span class="text-xs text-gray-400">
+                    <i class="fas fa-bolt mr-1"></i>${d.daya_max} W max
+                </span>
+            </div>
+        </div>
+    `).join('');
+}
+
+// ================================================================
+// DEVICE DETAIL MODAL
+// ================================================================
+async function showDeviceDetail(deviceId) {
+    STATE.currentDeviceId = deviceId;
+    
+    try {
+        const data = await apiFetch(`/device/${deviceId}`);
+        const d = data.device;
+        
+        document.getElementById('modalNamaKamar').textContent = d.nama_kamar;
+        document.getElementById('modalDeviceId').textContent = d.device_id;
+        document.getElementById('modalAvatar').textContent = (d.nama_kamar || d.device_id).charAt(0).toUpperCase();
+        document.getElementById('modalAvatar').style.background = 'linear-gradient(135deg, #6366f1, #8b5cf6)';
+        document.getElementById('modalDaya').textContent = d.daya_saat_ini + ' W';
+        document.getElementById('modalArus').textContent = d.arus_saat_ini + ' A';
+        document.getElementById('modalEnergi').textContent = d.energi_total + ' kWh';
+        document.getElementById('modalBatasDaya').textContent = d.batas_daya + ' W';
+        document.getElementById('modalRelayState').textContent = d.relay_state;
+        document.getElementById('modalRelayState').className = `font-bold ${d.relay_state === 'ON' ? 'text-green-500' : 'text-red-500'}`;
+        document.getElementById('modalBatasDayaInput').value = d.batas_daya;
+        
+        const dot = document.getElementById('modalStatusDot');
+        dot.className = `pulse-dot ${d.status_koneksi === 'ONLINE' ? 'online' : d.overload ? 'overload' : 'offline'}`;
+        
+        document.getElementById('deviceModal').classList.remove('hidden');
+    } catch (err) {}
+}
+
+function closeDeviceModal() {
+    document.getElementById('deviceModal').classList.add('hidden');
+}
+
+async function controlRelay(command) {
+    if (!STATE.currentDeviceId) return;
+    try {
+        const result = await apiFetch(`/device/${STATE.currentDeviceId}/relay`, {
+            method: 'POST',
+            body: JSON.stringify({ command: `RELAY_${command}` })
+        });
+        showToast(`Relay ${command} berhasil`, 'success');
+        showDeviceDetail(STATE.currentDeviceId);
+        loadDashboard(false);
+    } catch (err) {}
+}
+
+async function updateBatasDaya() {
+    if (!STATE.currentDeviceId) return;
+    const batas = document.getElementById('modalBatasDayaInput').value;
+    if (!batas || batas < 100) {
+        showToast('Batas daya minimal 100 Watt', 'warning');
+        return;
+    }
+    try {
+        await apiFetch(`/device/${STATE.currentDeviceId}/batas-daya`, {
+            method: 'PUT',
+            body: JSON.stringify({ batas_daya: parseFloat(batas) })
+        });
+        showToast('Batas daya berhasil diperbarui', 'success');
+        showDeviceDetail(STATE.currentDeviceId);
+    } catch (err) {}
+}
+
+// ================================================================
+// ADD DEVICE MODAL
+// ================================================================
+function openAddDeviceModal() {
+    document.getElementById('addDeviceModal').classList.remove('hidden');
+}
+
+function closeAddDeviceModal() {
+    document.getElementById('addDeviceModal').classList.add('hidden');
+}
+
+async function addDevice() {
+    const deviceId = document.getElementById('newDeviceId').value.trim();
+    const namaKamar = document.getElementById('newNamaKamar').value.trim();
+    const batasDaya = parseFloat(document.getElementById('newBatasDaya').value);
+    
+    if (!deviceId) { showToast('ID perangkat wajib diisi', 'warning'); return; }
+    if (!namaKamar) { showToast('Nama kamar wajib diisi', 'warning'); return; }
+    
+    try {
+        await apiFetch('/device/register', {
+            method: 'POST',
+            body: JSON.stringify({ device_id: deviceId, nama_kamar: namaKamar, batas_daya: batasDaya })
+        });
+        showToast('Perangkat berhasil ditambahkan', 'success');
+        closeAddDeviceModal();
+        document.getElementById('newDeviceId').value = '';
+        document.getElementById('newNamaKamar').value = '';
+        loadDevices();
+        loadDashboard(false);
+        loadDevicesForSelect();
+        loadSettingsDevices();
+    } catch (err) {}
+}
+
+// ================================================================
+// HISTORY
+// ================================================================
+async function loadDevicesForSelect() {
+    try {
+        const data = await apiFetch('/devices');
+        const select = document.getElementById('historyDeviceSelect');
+        const currentVal = select.value;
+        select.innerHTML = '<option value="">Pilih Kamar...</option>' + 
+            (data.devices || []).map(d => `<option value="${d.device_id}">${d.nama_kamar}</option>`).join('');
+        if (currentVal) select.value = currentVal;
+    } catch (err) {}
+}
+
+async function loadHistory() {
+    const deviceId = document.getElementById('historyDeviceSelect').value;
+    const limit = parseInt(document.getElementById('historyLimit').value);
+    
+    if (!deviceId) {
+        document.getElementById('historyBody').innerHTML = '<tr><td colspan="4" class="text-center py-8 text-gray-400">Pilih kamar untuk melihat riwayat</td></tr>';
+        return;
+    }
+    
+    try {
+        const data = await apiFetch(`/device/${deviceId}/history?limit=${limit}`);
+        const history = data.history || [];
+        
+        // Update table
+        const tbody = document.getElementById('historyBody');
+        if (history.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-gray-400">Belum ada data riwayat</td></tr>';
+        } else {
+            tbody.innerHTML = history.map(h => `
+                <tr class="border-b border-gray-100 dark:border-gray-700">
+                    <td class="py-2 text-xs text-gray-500">${new Date(h.timestamp).toLocaleString('id-ID')}</td>
+                    <td class="py-2 text-right font-medium">${h.daya}</td>
+                    <td class="py-2 text-right">${h.arus}</td>
+                    <td class="py-2 text-center">
+                        <span class="text-xs px-2 py-0.5 rounded-full ${
+                            h.relay_state === 'ON' ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'
+                        }">${h.relay_state}</span>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        // Update chart
+        updateHistoryChart(history);
+        
+    } catch (err) {}
+}
+
+function updateHistoryChart(history) {
+    const canvas = document.getElementById('historyChart');
+    if (!canvas) return;
+    
+    const labels = history.map(h => {
+        const d = new Date(h.timestamp);
+        return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    });
+    const dayaData = history.map(h => h.daya);
+    
+    if (STATE.historyChart) {
+        STATE.historyChart.data.labels = labels;
+        STATE.historyChart.data.datasets[0].data = dayaData;
+        STATE.historyChart.update('none');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    STATE.historyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Daya (Watt)',
+                data: dayaData,
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99,102,241,0.1)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 2,
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { callback: v => v + 'W' } },
+                x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }
+            }
+        }
+    });
+}
+
+// ================================================================
+// SETTINGS
+// ================================================================
+function saveSettings() {
+    const url = document.getElementById('serverUrl').value.trim();
+    const interval = parseInt(document.getElementById('refreshInterval').value) || 5;
+    
+    localStorage.setItem('apiBase', url);
+    localStorage.setItem('refreshInterval', interval.toString());
+    STATE.API_BASE = url;
+    
+    startAutoRefresh();
+    showToast('Pengaturan disimpan', 'success');
+}
+
+async function loadSettingsDevices() {
+    try {
+        const data = await apiFetch('/devices');
+        const devices = data.devices || [];
+        const container = document.getElementById('settingsDeviceList');
+        
+        if (devices.length === 0) {
+            container.innerHTML = '<div class="text-center py-4 text-gray-400 text-sm">Belum ada perangkat</div>';
+            return;
+        }
+        
+        container.innerHTML = devices.map(d => `
+            <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                <div>
+                    <p class="font-medium text-sm">${d.nama_kamar}</p>
+                    <p class="text-xs text-gray-400">${d.device_id} | Batas: ${d.batas_daya}W</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="pulse-dot ${d.status_koneksi === 'ONLINE' ? 'online' : 'offline'}"></span>
+                    <button onclick="deleteDevice('${d.device_id}')" class="text-red-400 hover:text-red-600 transition-all">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    } catch (err) {}
+}
+
+async function deleteDevice(deviceId) {
+    if (!confirm(`Hapus perangkat ${deviceId}?`)) return;
+    try {
+        // Note: delete API endpoint not implemented in routes yet
+        showToast('Fitur hapus akan segera tersedia', 'info');
+    } catch (err) {}
+}
+
+// ================================================================
+// SIMULASI IoT
+// ================================================================
+function openSimulasi() {
+    // Load device list for select
+    apiFetch('/devices').then(data => {
+        const select = document.getElementById('simDeviceId');
+        select.innerHTML = (data.devices || []).map(d => 
+            `<option value="${d.device_id}">${d.nama_kamar} (${d.device_id})</option>`
+        ).join('');
+    }).catch(() => {});
+    
+    document.getElementById('simulasiModal').classList.remove('hidden');
+}
+
+function closeSimulasi() {
+    document.getElementById('simulasiModal').classList.add('hidden');
+}
+
+function updateSimDaya() {
+    const arus = parseFloat(document.getElementById('simArus').value);
+    const daya = arus * 220;
+    document.getElementById('simArusValue').textContent = arus.toFixed(1) + ' A';
+    document.getElementById('simDaya').value = Math.round(daya);
+    document.getElementById('simDayaValue').textContent = Math.round(daya) + ' W';
+}
+
+function updateSimArus() {
+    const daya = parseFloat(document.getElementById('simDaya').value);
+    const arus = daya / 220;
+    document.getElementById('simDayaValue').textContent = Math.round(daya) + ' W';
+    document.getElementById('simArus').value = arus.toFixed(1);
+    document.getElementById('simArusValue').textContent = arus.toFixed(1) + ' A';
+}
+
+async function sendSimulatedData() {
+    const deviceId = document.getElementById('simDeviceId').value;
+    const arus = parseFloat(document.getElementById('simArus').value);
+    const daya = parseFloat(document.getElementById('simDaya').value);
+    const relayState = document.getElementById('simRelay').value;
+    const overload = document.getElementById('simOverload').checked;
+    
+    if (!deviceId) { showToast('Pilih perangkat terlebih dahulu', 'warning'); return; }
+    
+    document.getElementById('simStatus').textContent = 'Mengirim data...';
+    
+    try {
+        const result = await apiFetch('/device/data', {
+            method: 'POST',
+            body: JSON.stringify({
+                device_id: deviceId,
+                arus: parseFloat(arus.toFixed(3)),
+                daya: Math.round(daya),
+                tegangan: 220,
+                relay_state: relayState,
+                overload: overload
+            })
+        });
+        
+        let msg = 'Data berhasil dikirim!';
+        if (result.command === 'RELAY_OFF') msg = '⚠️ Overload! Relay dimatikan otomatis!';
+        document.getElementById('simStatus').textContent = `✅ ${msg} (${new Date().toLocaleTimeString('id-ID')})`;
+        showToast(msg, result.command === 'RELAY_OFF' ? 'warning' : 'success');
+        
+        // Refresh dashboard
+        loadDashboard(false);
+        
+    } catch (err) {
+        document.getElementById('simStatus').textContent = '❌ Gagal mengirim data';
+    }
+}
+
+// ================================================================
+// AUTO LOAD ON PAGE VISIBLE
+// ================================================================
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+        if (STATE.activePage === 'dashboard') loadDashboard(false);
+    }
+});
+</script>
+
+</body>
+</html>
